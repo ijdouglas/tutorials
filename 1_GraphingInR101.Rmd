@@ -1,0 +1,366 @@
+---
+title: 'Graphing in R: 101'
+output:
+  html_document: default
+---
+For this tutorial, we'll cover how to generate basic 2-dimensional plots in `R`
+<br>
+To get started, we'll load the `ggplot2` library. We'll make use of the openly 
+available `diamonds` dataset that imports with `ggplot2`.
+```{r}
+library(ggplot2)
+```
+
+Let's take a quick look at the structure of this data.
+```{r}
+str(diamonds)
+```
+
+To see the description of the `diamonds` dataset, we can run:
+```{r}
+?diamonds
+```
+
+
+As we can see from the printout and from the description of the dataset, it contains 
+information about `53,940` diamonds, and their qualities, such as their weight 
+(coded `carat`), the quality of their cut (coded `cut`), their `price`, and so on. 
+
+Let's say we want to explore the relationship between two of the variables,
+say `carat` and `price`. We can plot one of these variables along the $x$-axis
+of a "Cartesian" (i.e., coordinate) plane, and the other on the $y$-axis to discover
+the nature of that relationship.
+
+# Plotting two variables in `base R`
+
+In `base R`, we can use the in-built function `plot`. 
+(Use `?plot` to read its description in more detail.)
+By default, the `plot` function will require at least two arguments: an `x` and `y` variable.
+These will be interpreted and displayed by `plot` as the $x$ and $y$ coordinates of each point.
+(For this reason, `plot` expects `x` and `y` to each be of the same length.)
+```{r}
+# Let us assign carat to the variable called 'x', and price to 'y'
+x <- diamonds$carat
+y <- diamonds$price
+plot(x, y)
+# Note that "x" and "y", as interpeted above by `plot()`
+# are the values we stored in the two lines of code above.
+```
+
+This is called a scatterplot. It shows us the "bivariate" relationship between two
+variables by plotting, for each datapoint, the value of one variable along one axis, 
+and the corresponding value of the other variable along the other axis. 
+We can glean that if points with low values for one variable also have low values of the other variable, 
+or if datapoints with high values of one variable have high values of the other variable as well,
+that the two variables are positively correlated. We see such a trend, among other things,
+from plotting `carat` and `price` here.
+
+Now that we have gotten a cursory sense of how the two variables co-occur,
+let's add a regression line to visualize the statistical relationship between them.
+To fit a regression in `R`, we can use the `lm` function, which will fit a 'linear model'.
+(Use `?lm` to see a full description of the funciton.)
+Here we'll use the formulae syntax in-built into `R`, as follows: `y ~ x`. Here, 
+our $y$ variable is the `price` of the diamond, and we'll predict it from `carat`, 
+our $x$ variable.
+
+```{r}
+diamonds_model <- lm(y ~ x) # recall that we stored price and carat as 'y' and 'x'
+# Or, equivalently: `diamonds_model <- lm(price ~ carat, data = diamonds)`
+```
+
+Now let's add a line to visualize the relationship between the variables.
+The function we use to graph a regression line is `abline`. By default, `abline` must
+be called after an existing scatterplot is already drawn. This also means that you
+don't need to re-generate a plot when you use it. `R` knows automatically that you
+want to draw your regression line overtop of the your existing scatterplot if you
+simply call `plot`, and then `abline`. To `abline`, we supply the model object
+that we fit using `lm`, and `abline` automatically converts it to a line.
+```{r}
+# Here we re-generate the scatterplot:
+plot(x = x, y = y)
+abline(diamonds_model, col = 'red')
+```
+
+# Customizing the plots
+As you may have noticed, we supplied an additional argument above: `col = 'red'`.
+`col` is an argument (or "parameter") that the function `abline` recognizes, and
+which the user can specify the color of the line drawn by `abline`. 
+
+There are many other parameters that we can customize to make our graphs look
+publication ready! To see a list of all of the customizeable "graphical parameters",
+you can run:
+```{r}
+?`graphical parameter`
+```
+
+We'll start with the following, for just a quick overview:
+
+
+1. `col`: we can supply a character string, such as 'red', or a number, such as 2 to specify the color for a (or all) point(s) \n
+2. `pch`: we can supply 1, 2, 3, 4, up to 25 to change the shape of the points \n
+3. `xlab`; `ylab`: these parameters can be used to set the labels for the x and y axes \n
+4. `main`: supply a character string to `main` to set the title of the plot. \n
+5. `cex`: this controls the size of the points, as well as text, such as axis labels, on the plot \n
+6. `xlim`; `ylim`: Set the range of values spanning the x and y axes \n
+
+
+For the `abline` function (and for `plot` depending on the `type` parameter) we can
+also change different qualities of the *line* that we plot. These can take the form
+of, but are not limited to, for example:
+
+
+1. `lty`: change the type of line (e.g, dotted, dashed, solid, etc) \n
+2. `lwd`: the thickness of the line \n
+<br>
+
+
+-Again, `col`, and other parameters can be applied as in `plot`
+
+Let's give it a whirl
+```{r}
+plot(x, y,
+     col = 'chocolate', # there are many in-built colors in R's palette!
+     pch = 20,
+     xlab = 'Carat',
+     ylab = 'Price',
+     main = 'Relationship between the carat and price of a sample of diamonds',
+     xlim = c(-2, 6))
+# And we'll add the regression line
+abline(diamonds_model, col = 'blue', lty = 2, lwd = 2.4)
+```
+<br>
+Bonus advanced aesthetics:
+Just as the `abline` function simply draws a line overtop an existing plot,
+you can command `R` to do this any number of times using the following method:
+
+
+1. Generate any plot, such as the ones drawn above with `plot` \n
+2. In the next line, run: `par(new = TRUE)` # or equivalently `par(new = T)` \n
+3. Generate another plot, such as one using `plot`, and it will be superimposed \n
+4. repeat any number of times \n
+```{r}
+plot(x, y,
+     col = 'black', # there are many in-built colors in R's palette!
+     pch = 20,
+     cex = 4,
+     xlab = 'Carat',
+     ylab = 'Price',
+     main = 'Relationship between the carat and price of a sample of diamonds')
+# instruct R to draw the next plot on top of the existing:
+par(new = T)
+# Generate a new plot
+plot(x, y,
+     col = 'chocolate', # there are many in-built colors in R's palette!
+     pch = 20,
+     cex = 3,
+     xlab = '', # we don't want, or need, to redraw the same axis label and title text
+     ylab = '', # we don't want, or need, to redraw the same axis label and title text
+     main = '') # we don't want, or need, to redraw the same axis label and title text
+# And add the regression line as before
+abline(diamonds_model, col = 'blue', lwd = 3)
+```
+<br>
+
+
+# Plotting using `ggplot2`
+`ggplot2` (and its predecessor `ggplot`) is a package imported by the larger
+`tidyverse` package, and developed by the developers of the other packages imported
+by `tidyverse`. It is the data visualization arm of the tidy-verse.
+
+`ggplot2` is based on the so-called "Grammar of Graphics" (hence the "gg" in "ggplot').
+This refers to a literal "grammar": it is a way of speaking about graphs, including
+most elements that we notice right away, like the color of the points, to more subtle
+features like the 'coordinate system' itself. A basic breakdown of the grammar is as follows:
+
+
+* Layer \n
+  + Data \n
+  + Mapping \n
+  + Stat \n
+  + Geom \n
+* Scale \n
+* Coordinate System \n
+* Facets \n
+(Visit https://vita.had.co.nz/papers/layered-grammar.pdf for more extensive information.)
+
+Basically, `ggplot2` graphs our images one layer at a time. In each layer, we
+have the option to specify what the data is that is being plotted, what variables
+from that data might be associated with what axis in our coordinate plane, what shape
+that coordinate plane might take (i.e., square, like a cartesian plane, or rounded, using polar coordinaes).
+
+The basic idea is that by inputing data, assigning, projecting, or "mapping" the variables 
+from that data into a coordinate system, and optionally stretching or shrinking the 
+scale of that system, (as well as optionally changing the shape and color of our datapoints), 
+we have all the basic components to turn any variables into a wide variety of plot types, from
+a 'line graph', 'bar graph', 'scatterplot', 'radar plot', 'parallel coordinate plot', you name it.
+
+
+## 1. Create the first layer.
+To create a plot in `ggplot2`, we establish the first layer using `ggplot()`. We can
+even see what happens when we plot only this layer:
+```{r}
+ggplot()
+```
+<br>
+We created a layer for a graph with no data. Without data, a graph still exists... 
+In this case (by default), we generated a rectangular or 'cartesian' plane. This 
+means that the x-axis is perpindicular to the 'y'. We can't really tell this from 
+the above because there is no data. So let's add some. 
+
+## 2. Add data using `mapping = ` argument/parameter.
+To `mapping`, we are required to supply the variables which we wish to map using
+the `aes` function. The idea behind `aes` is that we may want to map many aspects of
+our data to different aesthetics elements of the layer we're plotting (demonstrated below).
+Nevertheless they are all still "aesthetic mappings", and so we set `mapping = aes()`.
+Additionally, if we are to supply variables, we must have some data (unles we're going)
+to use those "x" and "y" variables that we created earlier in this tutorial. But typically,
+we wish to instruct `ggplot` to graph variable from within a dataframe that we are supplying
+as a whole to `ggplot`. So below we set the argument `data = diamonds`, and then
+can set `mapping = aes(x = carat, y = price)`
+```{r}
+ggplot(data = diamonds, mapping = aes(x = carat, y = price))
+```
+<br>
+Interesting. Now this layer has been populated with some information, but what is still missing?
+
+We have mapped our variables to the x and y axes, but we have not assigned them a
+geometric representation! Even if we put our variables into a coordinate system, we 
+can conceivably generate several different aesthetic representation of them. To 
+visualize the data as a scatterplot, we use `geom_point`.
+
+## 3. Add the "geom"
+```{r}
+ggplot(data = diamonds, mapping = aes(x = carat, y = price)) +
+  geom_point()
+```
+<br>
+In the above example, we separated each layer using the `+`, in accordance with
+`ggplot` syntax. What had carried along from layer to layer was the aesthetic mapping.
+
+As in our demonstration using `base R`, we can add another layer to graph the 
+regression line. The regression line is nothing more than a statistical transformation
+of our data as well. In fact, the regression equation itself can be solved for
+using regular arithmetic. In the "grammar of graphics", this is therefore added
+using another layer, and an in-built (in `ggplot`) function called `geom_smooth`.
+
+Under the hood, `geom_smooth` is calculating the transformation of the x and y 
+variables to generate the regression, and then visualizing it as a line.
+
+
+* We request certain other aspects of the aesthetic representation \n
+  + We set `method = 'lm'` to request a linear (flat) regression \n
+  + We explicate that the we're modelling `y ~ x`, as before. \n
+
+```{r}
+ggplot(data = diamonds, mapping = aes(x = carat, y = price)) +
+  geom_point() +
+  geom_smooth(method = 'lm', formula = 'y ~ x')
+```
+<br>
+
+
+# Customizing other elements of `ggplot` graphs
+As in `base R`, we can customize the color of our plot, the points in it, the lines it
+generates and so on. In `ggplot` these are all aesthetic representations of the data.
+So most of this can be done inside of the call to `aes`. An advantage of doing so, is
+that we have more flexibility than we do in `base R` to change how each individual
+data point is represented in our graph.
+
+For example, let's change the color of each point in the above graph, so that
+it's shade will be tweaked, continuously, as the price increases. 
+```{r}
+ggplot(data = diamonds, mapping = aes(x = carat, y = price)) +
+  geom_point(aes(color = price)) +
+  geom_smooth(method = 'lm', formula = 'y ~ x')
+```
+<br>
+We can also change the palette, so that the maximum price is mapped to a different hue
+(and likewise for the minimum). This is a reiteration of the concept that our data
+are at all times merely being mapped into different scales and aesthetic systems.
+```{r}
+ggplot(data = diamonds, mapping = aes(x = carat, y = price)) +
+  geom_point(aes(color = price)) +
+  geom_smooth(method = 'lm', formula = 'y ~ x') +
+  scale_color_gradient(low = 'gold', high = 'chocolate')
+```
+<br>
+
+
+# Further customization.
+For each `geom_` function, a known set of parameters exist. For example, the first two arguments
+supplied to `geom_point` are the x and y coordinates, because no matter what coordinate system
+we are project the data into, a point will be comprised of only two coordinates. For other "geoms",
+such as `geom_contour`, we need a $z$ variable as well, for example. <br>
+Below, we'll take a look at the parameters that can be passed to `geom_point`
+
+```{r}
+ggplot(data = diamonds, mapping = aes(x = carat, y = price)) +
+  geom_point( 
+    # again, mapping the price variable to the color of the points:
+    aes(color = price), 
+    # the next two aesthetics are not 'mapped', because they are not coming from the data:
+    shape = 24, # exactly the same as "pch" in base R
+    size = 3 # the size of the point
+  ) + 
+  geom_smooth(
+    method = 'lm', formula = 'y ~ x',
+    linetype = 2 # works the same as lty in base R
+  ) + 
+  scale_color_gradient(low = 'gold', high = 'chocolate') +
+  coord_flip() # Here, we flip the location of the x and y axes
+```
+
+Using a `facet`, we can create a seperate graph for different levels of a grouping variable
+```{r}
+ggplot(data = diamonds, mapping = aes(x = carat, y = price)) +
+  geom_point( 
+    # again, mapping the price variable to the color of the points:
+    aes(color = price), 
+    # the next two aesthetics are not 'mapped', because they are not coming from the data:
+    shape = 24, # exactly the same as "pch" in base R
+    size = 3 # the size of the point
+  ) + 
+  geom_smooth(
+    method = 'lm', formula = 'y ~ x',
+    linetype = 2 # works the same as lty in base R
+  ) + 
+  scale_color_gradient(low = 'gold', high = 'chocolate') +
+  coord_flip() + # Here, we flip the location of the x and y axes
+  facet_wrap(~cut) # similar to the formula syntax
+```
+<br> 
+
+
+We can also change the type of regression line if we think the relationship is non-linear.
+In addition, the layer of the graph that constitutes the coordinate plane can be modified
+to change the color, scale, etc. We'll change the color and the drawing of the 
+grid lines here as well. These changes are mostly conducted using `theme()` functions.
+```{r, warning=F, message=F}
+library(tidyverse)
+ggplot(data = sample_frac(diamonds, size = .4), # just plot 40% of the data to reduce computational cost
+       mapping = aes(x = carat, y = price)) +
+  geom_point( 
+    # again, mapping the price variable to the color of the points:
+    aes(color = price), 
+    # the next two aesthetics are not 'mapped', because they are not coming from the data:
+    shape = 24, # exactly the same as "pch" in base R
+    size = 3 # the size of the point
+  ) + 
+  geom_smooth(
+    method = 'loess', # fit a non-parametric smoothing curve
+    formula = 'y ~ x',
+    se = FALSE, # let's not plot the standard error band to reduce computing cost
+    linetype = 2 # works the same as "lty" in base R
+  ) + 
+  scale_color_gradient(low = 'gold', high = 'chocolate') +
+  # Now to change some of the elements of the coordinate plane
+  theme(plot.title = element_text(hjust = .5), text = element_text(size = 12)) +
+  theme(panel.border = element_rect(color = 'black', fill = NA, size = .9)) +
+  theme(panel.background = element_rect(color = 'black', fill = 'white')) +
+  theme(panel.grid = element_line(color = 'lightgrey', size = .2)) +
+  theme(plot.background = element_rect(fill = 'white')) +
+  theme(axis.text = element_text(size = 10, color = 'black')) +
+  # We can add a title too
+  ggtitle(label = 'Here is the Plot Title!')
+```
+
