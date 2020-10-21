@@ -1,0 +1,548 @@
+---
+title: 'Gradient Boosted Machines: Regression'
+output:
+  html_document: default
+---
+```{r, warning = F, message=F}
+library(gbm)
+library(MLmetrics)
+library(vip)
+library(dplyr)
+library(ggplot2)
+library(caret)
+remotes::install_github("rstudio/reticulate")
+library(reticulate)
+
+#Data used:
+## Wine Quality for regression:
+# https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/
+
+# For later use, define a custom ggplot theme for all plots generated in R code:
+ggplot2::theme_set(
+  theme(
+    panel.border = element_rect(color = 'black', fill = NA, size = .9), 
+    panel.background = element_rect(color = 'black', fill = 'white'), 
+    panel.grid = element_line(color = 'lightgrey', size = .2), 
+    plot.background = element_rect(fill = 'white'),
+    plot.title = element_text(hjust = .5)
+  )
+)
+```
+
+# 1. Download the datasets
+```{r}
+# The red wine dataset:
+download.file(
+  url = "https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/winequality-red.csv", 
+  destfile = "~/red_wine_qual.csv"
+)
+# The white wine dataset:
+download.file(
+  url = "https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/winequality-white.csv", 
+  destfile = "~/white_wine_qual.csv"
+)
+```
+
+### Read the datasets in to the Rstudio environment
+```{r}
+# Here we read in [using read.csv()] both datasets inside of a call to rbind().
+# So they will be read in and immediately stacked atop one another into one dataset.
+all_wine = rbind(read.csv(
+  # Arguments for the first call to read.csv()
+  # Enter the file path and name:
+  file = "~/red_wine_qual.csv", 
+  # For some reason, each data point was seperated with a semi-colon in the downloaded data
+  sep = ";", 
+  # For character variables, read them in as character strings, rather than levels of a factor
+  # (In case the two data frames we're rbind-ing have different factor levels, rbind would fail)
+  stringsAsFactors = F), 
+  # same for the other dataset:
+  read.csv("~/white_wine_qual.csv", sep = ";", stringsAsFactors = F)
+) # close the rbind.
+
+# Check out the nature of the dataset
+str(all_wine)
+```
+
+
+### Explore the data visually
+
+We'll take a quick look at the distribution of the response variable
+```{r}
+ggplot(all_wine) + # initialize a plotting space
+  geom_histogram(aes(x = quality),  # visualize the histogram of the variable "quality"
+                 fill = 'grey', color = 'black', 
+                 # One 'bin' of the histogram per value of quality, since it is actually categorical:
+                 bins = n_distinct(all_wine$quality))
+```
+
+# 2. Split the data into train and test sets
+```{r}
+set.seed(1)
+# Use sample() to select random numbers from 1, 2, 3, ... Nrow of the data (row indices)
+train.idx <- sample(1:nrow(all_wine), size = nrow(all_wine)*.8)
+wine_train <- all_wine[train.idx, ] # use square brackets to subset by these row indices
+wine_test <- all_wine[-train.idx, ] # negate the row indexer to select all other rows.
+
+# Save these out as csv files on your computer so that we can later
+# access them directly when we run the python code (much later)
+write.csv(all_wine, "~/all_wine_quality.csv", 
+          # don't add a column enumarting the rows:
+          row.names = F) 
+write.csv(wine_train, "~/wine_train.csv", row.names = F) 
+write.csv(wine_test, "~/wine_test.csv", row.names = F) 
+```
+
+
+# 3. Using `gbm` to predict wine quality scores
+For now we will hold hyperparameters constant (rather than tuning them). However, 
+the hyperparemeters often tuned for a GBM fit with `gbm::gbm` model are:
+
+1. `shrinkage`: the proportion by which to scale down the new predictions from each 
+sequential tree. \n
+2. `n.minobsinnode`: The minimum size of a terminal leaf or node. Values greater 
+thatn 1 will help attenuate overfitting
+3. `interaction.depth`: The number of splits each tree is allowed to make.
+<br>
+Other hyperparameters such as `n.trees`,`cv.folds` or `bag.fraction`, usually don't affect model 
+performance, but can interfere with our ability to find the optimal model if we 
+set a bad value. use `?gbm` for details. *More on hyperparameter tuning below*. 
+```{r}
+wine_gbm = gbm(
+  # Specify the formula for the model in the fomrat: "response ~ predictors"
+  formula = quality ~ ., 
+  # the train data:
+  data = wine_train,
+  # Specify the assumed distribution of the response variable:
+  distribution = 'gaussian',
+  # The number of trees to build in total:
+  n.trees = 500,
+  # The percentage (form 0 to 1) of the residuals from each new tree to increment
+  # our cumulative prediction:
+  shrinkage = .1, # this is the default
+  # The number of samples to randomly sample from previous trees with which
+  # to fit subsequent trees:
+  bag.fraction = .7,
+  # The number of cross validation folds to determine the performance of each tree:
+  cv.folds = 5
+)
+```
+
+### Investigate the performance of the model
+```{r}
+# Use gbm's gbm.perf() function
+gbm.perf(
+  # Supply the model:
+  wine_gbm, 
+  # Compute performance with respect to the cross-validation folds:
+  method = 'cv', 
+  # Set plot.it to T (or TRUE) to visualize the error at each boosting iteration (at each tree):
+  plot.it = T
+)
+```
+
+
+*Note*: this also printed out a number: `r gbm.perf(wine_gbm, method = 'cv', plot.it = F)`. 
+That is the boosting iteration, or the number of the tree at which 
+cross-validation error from the 5-fold cross-validation was minimized. \n
+
+
+### Calculate the performance on our held-out test set
+We'll use two functions imported from the `MLmetrics` package: `R2_Score` and `MSE`
+```{r}
+best_tree = gbm.perf(wine_gbm, plot.it = F, method = 'cv') # now, don't plot it
+# Set up a little data frame with a column for the R2 and MSE computed with the test data
+# so that it prints out in a clear way.
+cross_val_score = data.frame(
+  # Here we use functions from MLmetrics package, which take the predicted and true values of 
+  # the response variable, in order to compute cross-validation scores/metrics of model performance
+  R2 = R2_Score(y_pred = predict(wine_gbm, newdata = wine_test, n.trees = best_tree), 
+                y_true = wine_test$quality),
+  MSE = MSE(y_pred = predict(wine_gbm, newdata = wine_test, n.trees = best_tree), 
+             y_true = wine_test$quality)
+)
+cross_val_score
+```
+
+
+#### Compare it to a linear regression
+```{r}
+# Fit model
+reg_mod = lm(quality ~ ., data = wine_train)
+# Score model with test data:
+data.frame(
+  R2 = R2_Score(
+    y_pred = predict(object = reg_mod, newdata = wine_test),
+    y_true = wine_test$quality),
+  MSE = MSE(
+    y_pred = predict(object = reg_mod, newdata = wine_test),
+    y_true = wine_test$quality)
+)
+```
+ 
+ 
+# 4. Compute variable importance
+#### A quick primer on (permutation) variable importance.
+
+* Permutation Variable importance works by one-by-one replacing a variable with 
+random noise (by shuffling or *permuting* it), and then quantifying by how much 
+that hurts the model's performance.
+* Larger changes indicate that a given variable is important to the model
+* Research shows that these metrics are best computed with the variables in the 
+test set, which avoids introducing a positive-bias/inflation that can result from 
+correlations between predictors (https://threadreaderapp.com/thread/1299146947752796166.html)
+
+
+### Using `vip::vi_permute()` to compute cross-validated permutation variable importance
+```{r}
+# (required by `vip`) Write a function with which to get our predicted values.
+# For compatibility, the arguments of the function must be 'object' and 'newdata'
+predict_from_best_tree <- function(object, newdata)
+{
+  predict(object, newdata, n.trees = best_tree)
+}
+# calculate variable importance
+permutation_imp = vi_permute(
+  # 1. supply the model (any model)
+  object = wine_gbm, 
+  # 2. Specify the names of the predictors of which we wish to compute the importance
+  feature_names = wine_train %>% select(-quality) %>% names,
+  # 3. Supply the TEST data, instead of the TRAIN data (a small hack here!)
+  train = wine_test,
+  # 4. Supply the corresponding response variable
+  target = wine_test$quality,
+  # 5. The metric with which to assess model performance before/after permutation
+  metric = 'mse',
+  # 6. define importance as the ratio of true-to-permuted MSE
+  type = 'ratio',
+  # 7. For stability, permute each variable 100 times.
+  nsim = 100,
+  keep = T, # for plotting, this needs to be TRUE
+  pred_wrapper = predict_from_best_tree # Here we supply our wrapper of predict()
+)
+
+# Print the table of variable importances, and the St.Dev from the 100 permutations
+permutation_imp
+```
+
+
+#### Plot the results
+```{r}
+vip(object = permutation_imp, # supply the result of vi_permute()
+    num_features = ncol(wine_test) - 1, # tell it how many variables to plot (all)
+    mapping = aes(fill = Variable), # pass along arguments to ggplot()
+    geom = 'boxplot') # plot boxplots (other options in ?vip)
+```
+
+
+#### Compared to regression coefficients
+```{r}
+summary(reg_mod)
+```
+
+
+#### Compared to permutation importances of the regression model
+```{r}
+# Same here
+vip(object = vi_permute(
+  object = reg_mod, 
+  feature_names = wine_train %>% select(-quality) %>% names,
+  train = wine_test,
+  target = wine_test$quality,
+  metric = 'mse',
+  type = 'ratio',
+  nsim = 100,
+  keep = T,
+  pred_wrapper = function(object, newdata) predict(object, newdata)),
+  num_features = ncol(wine_test) - 1, 
+  mapping = aes(fill = Variable), 
+  geom = 'boxplot'
+)
+```
+
+
+# Hyperparameter tuning
+
+#### A quick primer on tuning with `caret`:
+
+
+1. A model is trained with the `train` function.
+2. We use the `trainControl` function to pass along to `train` various options
+that will guide our hyperparameter tuning process.
+3. We also supply to `train` a 'tune grid' or 'hyperparameter grid', which specifies
+all of the combinations of hyperparemeter settings to train the model on (of which
+one will minimize cross validation error and determine the settings of the final
+model).
+4. In the `train` function, we supply our data, the formula of the model, and
+also instruct `caret` of which model we are using to do the modeling. \n
+
+
+Importantly, `caret::train` doesn't really fit a model itself; it requires us 
+to specify (as an argument supplied to `method`) a model from another `R` package 
+that it knows how to look for. For example, `caret` has in-built codes/names for 
+many of the models built by the many published `R` packages, so that, for example, 
+if we say `method = "rf"`, `caret` knows to build a random forest model by 
+calling (under the hood) `randomForest()` from the package `randomForest`. \n
+The list of models available can be found in the `caret::train` documentation. 
+Below, we fit a GBM from the same `gbm` package as above, using `method = "gbm"`.
+```{r}
+train_ctrl = trainControl(
+  # Set the method for calculating prediction error to be 'cross-validation':
+  method = 'cv', 
+  # Set the number of cross-validation folds to be 5:
+  number = 5
+)
+
+# Define the values of the hyperparemeters over which to tune the model.
+param_grid = expand.grid(
+  interaction.depth = c(1, 2, 3),
+  n.minobsinnode = c(5, 10),
+  shrinkage = c(.1, .8),
+  # Note, if we don't supply caret ALL of the hyperparameters it is looking for,
+  # we would get an error. So even though we won't tune over multiple values
+  # for n.trees, we'll supply it here anyway:
+  n.trees = 100 # to save time, I set it to 100 (may want a larger value in practice)
+)
+
+# Now run train() with the above settings:
+caret_gbm <- caret::train(
+  form = quality ~., # supply the formula to model
+  data = wine_train, # supply the data
+  method = 'gbm', # request a gradient boosted machine
+  trControl = train_ctrl,
+  tuneGrid = param_grid,
+  verbose = F # we don't want it to print out results at every iteration!
+)
+```
+<br>
+
+**Let's look at the output**
+```{r}
+caret_gbm
+```
+
+As the final line of the output tells us, the best values for our hyperparameters 
+are `r caret_gbm$bestTuen$interaction.depth` splits per tree, allowing no less than  
+`r caret_gbm$bestTuen$n.minobsinnode` observations/subjects in a terminal node, and a
+shrinkage of `r caret_gbm$bestTuen$shrinkage`. Note, our hyperparemeter grid was 
+very imprecise (we only supplied a handful of values for each hyperparameter), so 
+we likely haven't yet found the absolute *best* model, but that's okay for now. \n
+
+
+**We can also extract this information directly:**
+```{r}
+best_params <- caret_gbm$bestTune
+best_params
+```
+
+
+
+**And the best model itself for use with other functions such as `predict` or `vip`**
+```{r}
+final_model <- caret_gbm$finalModel
+```
+
+
+#### Finally we can validate our final model's performance with the test data:
+```{r}
+# Using the same functions we used above to retrieve test-set error:
+data.frame(
+  R2 = R2_Score(
+    y_pred = predict(object = final_model, 
+                     newdata = wine_test, 
+                     n.trees = best_params$n.trees),
+    y_true = wine_test$quality),
+  MSE = MSE(
+    y_pred = predict(object = final_model, 
+                     newdata = wine_test, 
+                     n.trees = best_params$n.trees),
+    y_true = wine_test$quality)
+)
+```
+
+<br>
+By trying out different values for the hyperparameters, we found a model that is 
+better at predicting the quality of the held-out data better than the default values did.
+<br>
+
+# Again, with `python`
+```{python}
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.model_selection import GridSearchCV
+import numpy as np
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.inspection import permutation_importance
+from sklearn.metrics import r2_score, mean_squared_error
+from sklearn.model_selection import train_test_split
+```
+
+
+**Read in the data**
+```{python}
+wine_df = pd.read_csv('~/all_wine_quality.csv')
+```
+
+
+**Check the variable names**
+```{python}
+wine_df.columns
+```
+
+Looks like everything ran in as expected.
+
+
+# As before, we'll split the data to start
+```{python}
+X = wine_df.drop(columns = 'quality') # select all columns except 'quality'
+y = wine_df['quality'] # select just quality
+X_train, y_train, X_test, y_test = train_test_split(X, y, random_state = 1, test_size = .2)
+```
+
+
+But wait, we already saved out our train and test data! The above is just for 
+demonstration. For **reproducibility**, we'll actually read in the same exact train 
+and test split of the data that we used and wrote out above.
+
+```{python}
+X_train = pd.read_csv("~/wine_train.csv")
+X_test = pd.read_csv("~/wine_test.csv")
+# We do need to drop the response from each of the above, and save them as y_*
+y_train = X_train.quality # another way to select JUST quality
+X_train = X_train.drop(columns = 'quality')
+y_test = X_test.quality # another way to select JUST quality
+X_test = X_test.drop(columns = 'quality')
+# Check the dimensions for sanity
+print(X_train.shape)
+y_test.shape
+```
+
+
+#### A quick primer on hyperparameter tuning in `sklearn`
+Just like in `caret`, we conduct a sequential and exhaustive (to the extent that 
+we make it so) search of the possible hyperparameters by creating parameter "grid" 
+over which to iteratively build model. There are three main steps to tuning  
+hyerparameters with `sklearn`:
+
+
+1. Instantiate the model that you will be tuning. This is your **estimator**. This 
+can be any number of the models built-in to `sklearn`, such as support vector 
+machines, logistic regressions, random forests, neural nets, etc.
+2. Instantiate your grid using `GridSearchCV()`. This will take as an argument 
+the grid-like object containing all of the hyperparameter values (specific to the 
+type of estimator) that we would like to assess.
+3. Fit the estimator to the grid. Typically, we can use k-fold cross validation 
+with the train data to score model performance for each iteration of the grid.
+4. Score the final model to held-out test set. In this step, we take the best iteration, 
+identified in step 3 using only k-fold cross-validation, to externally validate the 
+model that was fit to the best combination of hyperparameteres. This is our final 
+model, and therefore we must use a never-before-seen test set to validate it.
+
+#### Setting up the hyperparameters:
+Here we define the parameter grid in the way compatible with the `GridSearchCV` function. <br>
+The parameter grid is going to by a type of `python` object called a `dict` or 
+"dictionary". It will be nothing more than a character string, paired with a 
+vector of values, then another character string to represent the name of another 
+hyperparemeter, seperated by a `:` from a list of possible values, and so on. Like so:
+```{python}
+params = {'n_estimators': [100], # The number of trees to build
+          'max_depth': [1, 3], # same as 'interaction depth' (number of splits per tree)
+          'min_samples_split': [5, 10], # same as n.minobsinnode (# of samples per leaf)
+          'learning_rate': [.1, .8], # same as shrinkage (size of step along gradient)
+          'loss': ['ls']} # we will search for the least squared error (same as MSE)
+```
+
+
+#### Setting up the model (estimator)
+Now we "instantiate" the model, by running `sklearn`'s own GBM function, but we won't 
+supply any hyperparameters or data just yet.
+```{python}
+GBM = GradientBoostingRegressor(random_state = 1) # setting a seed for reproducibility here as well
+```
+
+
+#### Set up the grid itself
+Now we supply our model to `GridSearchCV`, along with the parameters to again 
+instantiate an object, this time a grid-search-cross-validation object. Note, 
+we are just "instantiating" again because we have not supplied data. Here, we supply 
+those options to control the grid search, such as how many folds in our cross-validation 
+tests, the estimator to use, and the parameters over which to tune (that we defined above).
+```{python}
+gbm_gridCV = GridSearchCV(estimator = GBM, param_grid = params, cv = 5)
+```
+
+
+Now we have created an object, called `gbm_gridCV`, which contains a model and a 
+parameter grid. It is created with the `sklearn` function `GridSearchCV`, and so 
+it has it's own functions or `methods` that we can call from it. One is `fit`, 
+which we will finally use to supply the data, and fit each model, as in `caret::train`.
+
+#### Run the search:
+```{python}
+gbm_gridCV.fit(X_train, y_train)
+```
+
+
+Note, we didn't have to save the above line or assign a new object using "`=`". With 
+the `GridSearchCV` class of objects, it simply updates itself when we run `fit`.
+
+
+**Now we can view the results from running the grid search cross-validation.**
+```{python}
+results_table = gbm_gridCV.cv_results_
+# The results table has a lot of info (see the documentation for GridSearchCV)
+# We'll extract the hyperparameters values that were used, and the CV score.
+
+pd.DataFrame(results_table)[['param_learning_rate','param_max_depth','param_min_samples_split','mean_test_score']]
+```
+
+
+
+```{python, echo=FALSE}
+lr = gbm_gridCV.best_params_['learning_rate']
+md = gbm_gridCV.best_params_['max_depth']
+mss = gbm_gridCV.best_params_['min_samples_split']
+```
+
+
+Note that `sklearn` created these columns for us automatically, by just prepending
+the name of each parameter with "param_". As we can see, the best iteration occurred 
+when the learning rate was set to `r py$lr`, 
+the maximum depth was `r py$md`, and the number 
+of samples allowed in a leaf were `r py$mss`. \n
+
+
+**To access these values directly, you can use** `gbm_gridCV.best_params_`
+
+```{python}
+gbm_gridCV.best_params_
+```
+
+
+## Score the final model
+And as above, we can score our final model with the completely unseen test data. 
+To do so, we can use another function like those above that take the predicted and 
+true values of a given response, to calculate error. Here, when we call the `predict` 
+method directly from the `gbm_gridCV` object that we fit, it will generate predictions 
+automatically from the best model in the grid search based on the mean cross-validation score.
+```{python}
+pd.DataFrame({'R2': [r2_score(y_test, gbm_gridCV.predict(X_test))], 
+              'MSE': [mean_squared_error(y_test, gbm_gridCV.predict(X_test))]})
+```
+
+
+# Variable Importance in `sklearn`
+Finally, `sklearn` has the same capacity to generate permutation variable importance 
+that are calculated on held-out test data.
+```{python, warning=F, message=F}
+result = permutation_importance(gbm_gridCV.best_estimator_, X_test, y_test, n_repeats=100,
+                                random_state=1, n_jobs=2)
+sorted_idx = result.importances_mean.argsort()
+fig = plt.figure(figsize=(12, 6));
+plt.boxplot(result.importances[sorted_idx].T, vert = False,
+            labels=np.array(X_test.columns)[sorted_idx]);
+plt.title("Permutation Importance (test set)")
+fig.tight_layout();
+plt.show();
+```
