@@ -362,7 +362,7 @@ summary {
 
 
 <h1 class="title toc-ignore">Gradient Boosted Machines: Regression</h1>
-
+<h3>Ian  J. Douglas</h3>
 </div>
 
 
@@ -372,36 +372,8 @@ library(vip)
 library(dplyr)
 library(ggplot2)
 library(caret)
-remotes::install_github(&quot;rstudio/reticulate&quot;)</code></pre>
-<pre><code>## 
-##   
-   checking for file ‘/private/var/folders/sj/yj176mhx02n6shs20d029st40000gn/T/RtmpvnZk1R/remotescef6527f857/rstudio-reticulate-47ff9ec/DESCRIPTION’ ...
-  
-✓  checking for file ‘/private/var/folders/sj/yj176mhx02n6shs20d029st40000gn/T/RtmpvnZk1R/remotescef6527f857/rstudio-reticulate-47ff9ec/DESCRIPTION’
-## 
-  
-─  preparing ‘reticulate’:
-## 
-  
-   checking DESCRIPTION meta-information ...
-  
-✓  checking DESCRIPTION meta-information
-## 
-  
-─  cleaning src
-## 
-  
-─  checking for LF line-endings in source and make files and shell scripts
-## 
-  
-─  checking for empty or unneeded directories
-## 
-  
-─  building ‘reticulate_1.16-9001.tar.gz’
-## 
-  
-   
-## </code></pre>
+#remotes::install_github(&quot;rstudio/reticulate&quot;)</code></pre>
+
 <pre class="r"><code>library(reticulate)
 
 #Data used:
@@ -781,7 +753,8 @@ data.frame(
 </div>
 </div>
 <div id="again-with-python" class="section level1">
-<h1>Again, with <code>python</code></h1>
+<h1>Let's translate it to <code>python</code></h1>
+<p><br> This gives us a chance to re-run the analysis in environments that might have <code>python</code>, but not <code>R</code>, installed. In addition, we can compare the results between the two (more specifically the packages used in each language), which we'll expect to be similar, but not exactly the same due to stochasticity in the analysis or implementation differences. <br></p>
 <pre class="python"><code>import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
