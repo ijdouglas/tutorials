@@ -1,5 +1,9 @@
 ## Tutorials for R and Python
 
-Instructions: use your favorite web browser to open "1_GraphingInR101.html", "2_CustomizingPlotsInR.html", or "gbmRegression.html" to view the tutorials on plotting in R and Gradient Boosted Machines for Python and R.
+1. [Gradient Boosted Machines in Python and R](github.com/ijdouglas/ijdouglas.github.io/gbmRegression.html)
+2. [Basic Data Visualization in R](github.com/ijdouglas/tutorial/1_GraphingInR101.html)
+3. [Basic Data Visualization in R](github.com/ijdouglas/tutorial/2_CustomizingPlotsInR.html)
 
-Code used to generate each tutorial is in each corresponding `.Rmd` file of the same name.
+Alternative Instructions: use your favorite web browser to open "1_GraphingInR101.html", "2_CustomizingPlotsInR.html", or "gbmRegression.html" to view the tutorials on plotting in R and Gradient Boosted Machines for Python and R.
+
+Code used to generate each tutorial is in each corresponding `.Rmd` file of the same name in this repository.
