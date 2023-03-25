@@ -101,7 +101,7 @@ the hyperparemeters often tuned for a GBM fit with `gbm::gbm` model are:
 1. `shrinkage`: the proportion by which to scale down the new predictions from each 
 sequential tree. \n
 2. `n.minobsinnode`: The minimum size of a terminal leaf or node. Values greater 
-thatn 1 will help attenuate overfitting
+than 1 will help attenuate overfitting
 3. `interaction.depth`: The number of splits each tree is allowed to make.
 <br>
 Other hyperparameters such as `n.trees`,`cv.folds` or `bag.fraction`, usually don't affect model 
